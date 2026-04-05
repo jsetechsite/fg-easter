@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Happy Easter!</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --env-color: #ff99ac;
+            --env-dark: #f87171;
+        }
+
+        body {
+            background: radial-gradient(circle, #fff5f5 0%, #fed7e2 100%);
+            overflow: hidden;
+            touch-action: manipulation;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            margin: 0;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .sharp-render {
+            backface-visibility: hidden;
+            transform: translateZ(0);
+            will-change: transform, opacity;
+        }
+
+        #sparkleLayer {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .main-stage {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .envelope-wrapper {
+            position: relative;
+            cursor: pointer;
+            transition: all 0.7s cubic-bezier(0.19, 1, 0.22, 1);
+            z-index: 20;
+        }
+
+        .envelope {
+            position: relative;
+            width: 280px;
+            height: 180px;
+            background: var(--env-color);
+            border-radius: 0 0 12px 12px;
+            box-shadow: 0 15px 35px rgba(248, 113, 113, 0.25);
+        }
+
+        .envelope::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            z-index: 2;
+            border-top: 100px solid transparent;
+            border-right: 140px solid var(--env-dark);
+            border-bottom: 90px solid var(--env-dark);
+            border-left: 140px solid var(--env-dark);
+            border-radius: 0 0 12px 12px;
+        }
+
+        .flap {
+            position: absolute;
+            top: 0;
+            width: 0;
+            height: 0;
+            border-left: 140px solid transparent;
+            border-right: 140px solid transparent;
+            border-top: 100px solid var(--env-color);
+            transform-origin: top;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 3;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+        }
+
+        .envelope-wrapper.open .flap {
+            transform: rotateX(180deg);
+            z-index: 1;
+        }
+
+        .profile-img {
+            position: absolute;
+            top: 35px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            border: 4px solid #FFD700;
+            background: #fff;
+            z-index: 10;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            object-fit: cover;
+            transition: opacity 0.5s;
+        }
+
+        .envelope-wrapper.open .profile-img {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .egg {
+            position: absolute;
+            width: 54px;
+            height: 72px;
+            border-radius: 50% 50% 50% 50% / 65% 65% 35% 35%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 
+                inset -4px -6px 8px rgba(0,0,0,0.1),
+                inset 4px 6px 8px rgba(255,255,255,0.4),
+                0 8px 20px rgba(0,0,0,0.12);
+            z-index: 100;
+            border: 1px solid rgba(0,0,0,0.05);
+            background-clip: padding-box;
+            user-select: none;
+            left: 50%;
+            top: 50%;
+            margin-left: -27px;
+            margin-top: -36px;
+            transition: opacity 0.3s;
+        }
+
+        @keyframes scatter {
+            0% { transform: translate(0, 0) scale(0); opacity: 0; }
+            100% { transform: translate(var(--tx), var(--ty)) rotate(var(--tr)) scale(1); opacity: 1; }
+        }
+
+        @keyframes float {
+            0% { transform: translate(var(--tx), var(--ty)) rotate(var(--tr)) translate(0, 0); }
+            50% { transform: translate(var(--tx), var(--ty)) rotate(var(--tr)) translate(5px, -10px); }
+            100% { transform: translate(var(--tx), var(--ty)) rotate(var(--tr)) translate(-5px, 5px); }
+        }
+
+        .message-bubble {
+            position: absolute;
+            background: white;
+            padding: 10px 18px;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 700;
+            color: #d53f8c;
+            box-shadow: 0 8px 25px rgba(213, 63, 140, 0.2);
+            white-space: nowrap;
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: none;
+            z-index: 200;
+            border: 1.5px solid #fed7e2;
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0) translateY(15px); opacity: 0; }
+            100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+
+        .bunny-container {
+            position: fixed;
+            bottom: -180px;
+            right: 30px;
+            transition: bottom 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            pointer-events: none;
+        }
+
+        .bunny-visible { bottom: 20px; }
+
+        .bunny-speech {
+            background: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            border: 2.5px solid #ff99ac;
+            position: relative;
+            margin-bottom: 12px;
+            font-weight: 800;
+            color: #d53f8c;
+            box-shadow: 0 8px 20px rgba(255, 153, 172, 0.25);
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all 0.5s 0.8s;
+        }
+
+        .bunny-visible .bunny-speech { opacity: 1; transform: scale(1); }
+
+        .bunny-speech::after {
+            content: "";
+            position: absolute;
+            bottom: -10px;
+            right: 25px;
+            border-width: 10px 10px 0;
+            border-style: solid;
+            border-color: white transparent transparent;
+        }
+
+        .final-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 500;
+            background: white;
+            padding: 3rem;
+            border-radius: 40px;
+            box-shadow: 0 40px 80px rgba(213, 63, 140, 0.3);
+            border: 6px solid #ff99ac;
+            animation: bounceIn 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+            display: none;
+            width: 90%;
+            max-width: 420px;
+        }
+
+        @keyframes bounceIn {
+            0% { transform: translate(-50%, -40%) scale(0.8); opacity: 0; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+
+        .sparkle {
+            position: absolute;
+            background: #fff;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: blink 2s infinite alternate;
+            box-shadow: 0 0 8px #fff;
+        }
+
+        @keyframes blink {
+            from { opacity: 0.1; transform: scale(0.6); }
+            to { opacity: 0.8; transform: scale(1.1); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sparkleLayer"></div>
+
+    <div id="instruction" class="fixed top-12 text-center w-full z-50 text-pink-600 font-black text-3xl drop-shadow-md transition-opacity duration-500">
+        Tap the envelope 🌸
+    </div>
+
+    <div class="main-stage">
+        <div class="envelope-wrapper sharp-render" id="envelopeWrapper" onclick="openEnvelope()">
+            <div class="flap"></div>
+            <img src="https://picsum.photos/200" alt="Profile" class="profile-img sharp-render">
+            <div class="envelope"></div>
+        </div>
+    </div>
+
+    <div id="eggContainer" class="absolute inset-0 pointer-events-none z-100"></div>
+
+    <div id="bunny" class="bunny-container sharp-render">
+        <div class="bunny-speech">Click the eggs! 🐰🥚</div>
+        <div class="text-8xl drop-shadow-lg">🐰</div>
+    </div>
+
+    <div id="finalMessage" class="final-message">
+        <h1 class="text-4xl font-black text-pink-600 mb-2 leading-tight">You're Truly Amazing!</h1>
+        <p id="easterText" class="text-2xl text-pink-400 font-bold italic animate-pulse mb-6">Happy Easter 🐰✨</p>
+        <button onclick="resetGame()" class="px-10 py-4 bg-pink-500 text-white font-bold text-xl rounded-full hover:bg-pink-600 shadow-xl transition-all active:scale-95">Start Over</button>
+    </div>
+
+    <script>
+        const messages = ["You're Amazing! 🌟", "You are the best! 🏆", "USB (Unique, Smart, Beautiful)! 💻", "USB (Ur, So, Beautiful)!!!" , "Happy Easter! 🐰", "Keep Shining! ✨", "You make the world better! 🌍", "Stay Egg-straordinary! 🥚", "Love and Joy to you! ❤️"];
+        const colors = ['#FFB7B2', '#FFDAC1', '#E2F0CB', '#B5EAD7', '#C7CEEA', '#F9F7CF', '#FAD0C4', '#FBC2EB'];
+
+        let isEnvelopeOpen = false;
+        let eggsCracked = 0;
+        const totalEggs = 12;
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Get Name from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const userName = urlParams.get('n');
+
+        function playPopSound(freq = 400, type = 'sine') {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
+        }
+
+        function createSparkles() {
+            const layer = document.getElementById('sparkleLayer');
+            for (let i = 0; i < 45; i++) {
+                const sparkle = document.createElement('div');
+                sparkle.className = 'sparkle';
+                const size = Math.random() * 4 + 2;
+                sparkle.style.width = `${size}px`;
+                sparkle.style.height = `${size}px`;
+                sparkle.style.left = `${Math.random() * 100}vw`;
+                sparkle.style.top = `${Math.random() * 100}vh`;
+                sparkle.style.animationDelay = `${Math.random() * 4}s`;
+                layer.appendChild(sparkle);
+            }
+        }
+
+        function openEnvelope() {
+            if (isEnvelopeOpen) return;
+            isEnvelopeOpen = true;
+            const wrapper = document.getElementById('envelopeWrapper');
+            const inst = document.getElementById('instruction');
+            const bunny = document.getElementById('bunny');
+            wrapper.classList.add('open');
+            inst.style.opacity = '0';
+            playPopSound(600, 'triangle');
+            bunny.classList.add('bunny-visible');
+            confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 }, colors: colors, ticks: 400 });
+            setTimeout(() => {
+                scatterEggs();
+                wrapper.style.transform = 'translateY(250px) scale(0.65)';
+                wrapper.style.pointerEvents = 'none';
+            }, 400);
+        }
+
+        function scatterEggs() {
+            const container = document.getElementById('eggContainer');
+            container.innerHTML = '';
+            container.style.pointerEvents = 'auto';
+
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            const bunnyXLimit = viewportWidth * 0.3; 
+            const bunnyYLimit = viewportHeight * 0.2; 
+            
+            const eggPositions = [];
+            const minDistance = 85; 
+
+            for (let i = 0; i < totalEggs; i++) {
+                const egg = document.createElement('div');
+                egg.className = 'egg sharp-render';
+                
+                let tx, ty;
+                let isValid = false;
+                let attempts = 0;
+
+                while (!isValid && attempts < 100) {
+                    attempts++;
+                    tx = (Math.random() - 0.5) * (viewportWidth * 0.85);
+                    ty = (Math.random() - 0.5) * (viewportHeight * 0.7) - 40;
+                    
+                    if (tx > bunnyXLimit && ty > bunnyYLimit) continue;
+
+                    let overlap = false;
+                    for (const pos of eggPositions) {
+                        const dist = Math.sqrt(Math.pow(tx - pos.x, 2) + Math.pow(ty - pos.y, 2));
+                        if (dist < minDistance) {
+                            overlap = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!overlap) {
+                        isValid = true;
+                        eggPositions.push({x: tx, y: ty});
+                    }
+                }
+
+                const rotation = Math.random() * 720 - 360;
+                egg.style.setProperty('--tx', `${tx}px`);
+                egg.style.setProperty('--ty', `${ty}px`);
+                egg.style.setProperty('--tr', `${rotation}deg`);
+                egg.style.backgroundColor = colors[i % colors.length];
+                egg.style.animation = `scatter 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards, float ${3 + Math.random() * 3}s ease-in-out infinite alternate ${0.8 + (i * 0.05)}s`;
+                egg.style.animationDelay = `${i * 0.05}s`;
+
+                if(i % 3 === 0) {
+                    egg.style.backgroundImage = 'radial-gradient(rgba(255,255,255,0.4) 15%, transparent 20%)';
+                    egg.style.backgroundSize = '14px 14px';
+                } else if (i % 3 === 1) {
+                    egg.style.backgroundImage = 'linear-gradient(45deg, rgba(255,255,255,0.2) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.2) 75%, transparent 75%, transparent)';
+                    egg.style.backgroundSize = '20px 20px';
+                }
+
+                egg.onclick = (e) => crackEgg(e.currentTarget);
+                container.appendChild(egg);
+            }
+        }
+
+        function crackEgg(eggEl) {
+            if (eggEl.dataset.cracked) return;
+            eggEl.dataset.cracked = "true";
+            eggsCracked++;
+            playPopSound(800, 'sine');
+            
+            eggEl.style.animation = "none";
+            eggEl.style.transform = 'translate(var(--tx), var(--ty)) scale(1.25) rotate(var(--tr))';
+            
+            const rect = eggEl.getBoundingClientRect();
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble sharp-render';
+            bubble.innerText = messages[Math.floor(Math.random() * messages.length)];
+            
+            bubble.style.visibility = 'hidden';
+            document.body.appendChild(bubble);
+            
+            const bubbleWidth = bubble.offsetWidth;
+            const screenWidth = window.innerWidth;
+            const padding = 15;
+
+            let leftPos = rect.left + rect.width / 2;
+            
+            if (leftPos - bubbleWidth / 2 < padding) {
+                leftPos = padding + bubbleWidth / 2;
+            }
+            if (leftPos + bubbleWidth / 2 > screenWidth - padding) {
+                leftPos = screenWidth - padding - bubbleWidth / 2;
+            }
+
+            bubble.style.left = `${leftPos}px`;
+            bubble.style.top = `${Math.max(padding, rect.top - 60)}px`;
+            bubble.style.transform = 'translateX(-50%)';
+            bubble.style.visibility = 'visible';
+
+            eggEl.innerHTML = `<svg viewBox="0 0 100 100" class="w-2/3 h-2/3"><path d="M10,50 L30,65 L50,40 L70,75 L90,45" stroke="white" fill="none" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+            eggEl.style.opacity = "0.7";
+
+            setTimeout(() => {
+                bubble.style.opacity = "0";
+                setTimeout(() => bubble.remove(), 500);
+            }, 2200);
+
+            if (eggsCracked >= totalEggs) setTimeout(showFinalMessage, 1000);
+        }
+
+        function showFinalMessage() {
+            const final = document.getElementById('finalMessage');
+            const easterText = document.getElementById('easterText');
+            
+            // Apply name from URL if it exists
+            if (userName) {
+                easterText.innerText = `Happy Easter, ${userName} 🐰✨`;
+            } else {
+                easterText.innerText = `Happy Easter 🐰✨`;
+            }
+
+            final.style.display = 'block';
+            playPopSound(300, 'square');
+            confetti({ particleCount: 500, spread: 180, origin: { y: 0.5 }, colors: ['#FF99AC', '#FFD700', '#FFFFFF', '#87CEEB', '#B5EAD7'], gravity: 0.7, scalar: 1.2 });
+        }
+
+        function resetGame() { location.reload(); }
+        window.onload = createSparkles;
+    </script>
+</body>
+</html>
